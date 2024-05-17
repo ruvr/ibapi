@@ -40,10 +40,8 @@ type IbClient struct {
 	reqChan          chan []byte
 	errChan          chan error
 	msgChan          chan []byte
-	timeChan         chan time.Time
 	terminatedSignal chan int  // signal to terminate the three goroutine
 	done             chan bool // done signal is delivered via disconnect
-	clientVersion    Version
 	serverVersion    Version
 	connTime         string
 	extraAuth        bool
@@ -941,6 +939,12 @@ func (ic *IbClient) PlaceOrder(orderID int64, contract *Contract, order *Order) 
 		ic.wrapper.Error(orderID, UPDATE_TWS.code, UPDATE_TWS.msg+" It does not support duration attribute")
 	case v < mMIN_SERVER_VER_POST_TO_ATS && order.PostToAts != UNSETINT:
 		ic.wrapper.Error(orderID, UPDATE_TWS.code, UPDATE_TWS.msg+" It does not support postToAts attribute")
+	case v < mMIN_SERVER_VER_AUTO_CANCEL_PARENT && order.AutoCancelParent:
+		ic.wrapper.Error(orderID, UPDATE_TWS.code, UPDATE_TWS.msg+" It does not support autoCancelParent attribute")
+	case v < mMIN_SERVER_VER_ADVANCED_ORDER_REJECT && order.AdvancedErrorOverride != "":
+		ic.wrapper.Error(orderID, UPDATE_TWS.code, UPDATE_TWS.msg+" It does not support advancedErrorOverride attribute")
+	case v < mMIN_SERVER_VER_MANUAL_ORDER_TIME && order.ManualOrderTime != "":
+		ic.wrapper.Error(orderID, UPDATE_TWS.code, UPDATE_TWS.msg+" It does not support manualOrderTime attribute")
 	}
 
 	var v int
@@ -988,7 +992,7 @@ func (ic *IbClient) PlaceOrder(orderID int64, contract *Contract, order *Order) 
 	if ic.serverVersion >= mMIN_SERVER_VER_FRACTIONAL_POSITIONS {
 		fields = append(fields, order.TotalQuantity)
 	} else {
-		fields = append(fields, int64(order.TotalQuantity))
+		fields = append(fields, order.TotalQuantity.IntPart())
 	}
 
 	fields = append(fields, order.OrderType)
@@ -1315,6 +1319,18 @@ func (ic *IbClient) PlaceOrder(orderID int64, contract *Contract, order *Order) 
 
 		if ic.serverVersion >= mMIN_SERVER_VER_POST_TO_ATS {
 			fields = append(fields, handleEmpty(order.PostToAts))
+		}
+
+		if ic.serverVersion >= mMIN_SERVER_VER_AUTO_CANCEL_PARENT {
+			fields = append(fields, order.AutoCancelParent)
+		}
+
+		if ic.serverVersion >= mMIN_SERVER_VER_ADVANCED_ORDER_REJECT {
+			fields = append(fields, order.AdvancedErrorOverride)
+		}
+
+		if ic.serverVersion >= mMIN_SERVER_VER_MANUAL_ORDER_TIME {
+			fields = append(fields, order.ManualOrderTime)
 		}
 
 		msg := makeMsgBytes(fields...)
@@ -2902,6 +2918,7 @@ func (ic *IbClient) CancelWshEventData(reqID int64) {
 
 	ic.reqChan <- msg
 }
+
 //--------------------------three major goroutine -----------------------------------------------------
 /*
 1.goReceive scan a whole msg bytes and put it into msgChan
@@ -2909,7 +2926,7 @@ func (ic *IbClient) CancelWshEventData(reqID int64) {
 3.goRequest create a select loop to get request from reqChan and send it to tws or ib gateway
 */
 
-//goRequest will get the req from reqChan and send it to TWS
+// goRequest will get the req from reqChan and send it to TWS
 func (ic *IbClient) goRequest() {
 	log.Debug("requester start")
 	defer func() {
@@ -2937,9 +2954,14 @@ requestLoop:
 			}
 
 			nn, err := ic.writer.Write(req)
-			err = ic.writer.Flush()
 			if err != nil {
 				log.Error("write req error", zap.Int("nbytes", nn), zap.Binary("reqMsg", req), zap.Error(err))
+				ic.writer.Reset(ic.conn)
+				ic.errChan <- err
+			}
+			err = ic.writer.Flush()
+			if err != nil {
+				log.Error("flush req error", zap.Int("nbytes", nn), zap.Binary("reqMsg", req), zap.Error(err))
 				ic.writer.Reset(ic.conn)
 				ic.errChan <- err
 			}
@@ -2950,8 +2972,8 @@ requestLoop:
 
 }
 
-//goReceive receive the msg from the socket, get the fields and put them into msgChan
-//goReceive handle the msgBuf which is different from the offical.Not continuously read, but split first and then decode
+// goReceive receive the msg from the socket, get the fields and put them into msgChan
+// goReceive handle the msgBuf which is different from the offical.Not continuously read, but split first and then decode
 func (ic *IbClient) goReceive() {
 	log.Debug("receiver start")
 	defer func() {
@@ -3001,7 +3023,7 @@ func (ic *IbClient) goReceive() {
 
 }
 
-//goDecode decode the fields received from the msgChan
+// goDecode decode the fields received from the msgChan
 func (ic *IbClient) goDecode() {
 	log.Debug("decoder start")
 	defer func() {
@@ -3061,15 +3083,10 @@ func (ic *IbClient) LoopUntilDone(fs ...func()) error {
 	}
 
 	go func() {
-		select {
-		case <-ic.ctx.Done():
-			ic.Disconnect()
-		}
+		<-ic.ctx.Done()
+		ic.Disconnect()
 	}()
 
-	select {
-	case <-ic.done:
-		return ic.err
-	}
-
+	<-ic.done
+	return ic.err
 }

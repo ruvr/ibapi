@@ -1,15 +1,14 @@
 package ibapi
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/binary"
 	"io"
 	"math"
 	"reflect"
 	"strconv"
-	"time"
 
+	"github.com/shopspring/decimal"
 	"go.uber.org/zap"
 	// log "github.com/sirupsen/logrus"
 )
@@ -25,6 +24,8 @@ const (
 	// MAX_MSG_LEN is the max length that receiver could take.
 	MAX_MSG_LEN int = 0xFFFFFF
 )
+
+var UNSETDECIMAL = decimal.New(math.MaxInt64, math.MaxInt32)
 
 var log *zap.Logger
 
@@ -44,6 +45,7 @@ func GetLogger() *zap.Logger {
 	return log
 }
 
+/*
 func bytesToTime(b []byte) time.Time {
 	// format := "20060102 15:04:05 Mountain Standard Time"
 	// 214 208 185 250 177 234 215 188 202 177 188 228
@@ -93,6 +95,7 @@ func readMsgBytes(reader *bufio.Reader) ([]byte, error) {
 	return msgBytes, nil
 
 }
+*/
 
 // scanFields defines how to unpack the buf
 func scanFields(data []byte, atEOF bool) (advance int, token []byte, err error) {
@@ -157,6 +160,8 @@ func makeMsgBytes(fields ...interface{}) []byte {
 			msgBytes = strconv.AppendInt(msgBytes, v, 10)
 		case float64:
 			msgBytes = strconv.AppendFloat(msgBytes, v, 'g', 10, 64)
+		case decimal.Decimal:
+			msgBytes = append(msgBytes, []byte(v.String())...)
 		case string:
 			msgBytes = append(msgBytes, []byte(v)...)
 		case bool:
@@ -187,6 +192,7 @@ func splitMsgBytes(data []byte) [][]byte {
 	return fields[:len(fields)-1]
 }
 
+/*
 func decodeInt(field []byte) int64 {
 	if bytes.Equal(field, []byte{}) {
 		return 0
@@ -201,6 +207,7 @@ func decodeInt(field []byte) int64 {
 func decodeString(field []byte) string {
 	return string(field)
 }
+*/
 
 // func encodeInt64(i int64) []byte {
 // 	return []byte(strconv.FormatInt(i, 10))
@@ -240,13 +247,19 @@ func handleEmpty(d interface{}) string {
 		}
 		return strconv.FormatFloat(v, 'g', 10, 64)
 
+	case decimal.Decimal:
+		if v == UNSETDECIMAL {
+			return ""
+		}
+		return v.String()
+
 	default:
 		log.Panic("no handler for such type", zap.Reflect("val", d))
 		return "" // never reach here
 	}
 }
 
-//InitDefault try to init the object with the default tag, that is a common way but not a efficent way
+// InitDefault try to init the object with the default tag, that is a common way but not a efficent way
 func InitDefault(o interface{}) {
 	t := reflect.TypeOf(o).Elem()
 	v := reflect.ValueOf(o).Elem()
@@ -264,6 +277,7 @@ func InitDefault(o interface{}) {
 		if defaultValue, ok := field.Tag.Lookup("default"); ok {
 
 			switch defaultValue {
+			//TODO: add UNSETDECIMAL support
 			case "UNSETFLOAT":
 				v.Field(i).SetFloat(UNSETFLOAT)
 			case "UNSETINT":
@@ -365,6 +379,26 @@ func (m *MsgBuffer) readFloatCheckUnset() float64 {
 	}
 
 	return f
+}
+
+func (m *MsgBuffer) readDecimal() decimal.Decimal {
+	var d decimal.Decimal
+	m.bs, m.err = m.ReadBytes(fieldSplit)
+	if m.err != nil {
+		log.Panic("decode decimal error", zap.Error(m.err))
+	}
+
+	m.bs = m.bs[:len(m.bs)-1]
+	if bytes.Equal(m.bs, nil) {
+		return UNSETDECIMAL
+	}
+
+	d, m.err = decimal.NewFromString(string(m.bs))
+	if m.err != nil {
+		log.Panic("decode decimal error", zap.Error(m.err))
+	}
+
+	return d
 }
 
 func (m *MsgBuffer) readBool() bool {

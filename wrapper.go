@@ -4,24 +4,25 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"go.uber.org/zap"
 )
 
 // IbWrapper contain the funcs to handle the msg from TWS or Gateway
 type IbWrapper interface {
 	TickPrice(reqID int64, tickType int64, price float64, attrib TickAttrib)
-	TickSize(reqID int64, tickType int64, size int64)
-	OrderStatus(orderID int64, status string, filled float64, remaining float64, avgFillPrice float64, permID int64, parentID int64, lastFillPrice float64, clientID int64, whyHeld string, mktCapPrice float64)
+	TickSize(reqID int64, tickType int64, size decimal.Decimal)
+	OrderStatus(orderID int64, status string, filled decimal.Decimal, remaining decimal.Decimal, avgFillPrice float64, permID int64, parentID int64, lastFillPrice float64, clientID int64, whyHeld string, mktCapPrice float64)
 	Error(reqID int64, errCode int64, errString string)
 	OpenOrder(orderID int64, contract *Contract, order *Order, orderState *OrderState)
 	UpdateAccountValue(tag string, val string, currency string, accName string)
-	UpdatePortfolio(contract *Contract, position float64, marketPrice float64, marketValue float64, averageCost float64, unrealizedPNL float64, realizedPNL float64, accName string)
+	UpdatePortfolio(contract *Contract, position decimal.Decimal, marketPrice float64, marketValue float64, averageCost float64, unrealizedPNL float64, realizedPNL float64, accName string)
 	UpdateAccountTime(accTime time.Time)
 	NextValidID(reqID int64)
 	ContractDetails(reqID int64, conDetails *ContractDetails)
 	ExecDetails(reqID int64, contract *Contract, execution *Execution)
-	UpdateMktDepth(reqID int64, position int64, operation int64, side int64, price float64, size int64)
-	UpdateMktDepthL2(reqID int64, position int64, marketMaker string, operation int64, side int64, price float64, size int64, isSmartDepth bool)
+	UpdateMktDepth(reqID int64, position int64, operation int64, side int64, price float64, size decimal.Decimal)
+	UpdateMktDepthL2(reqID int64, position int64, marketMaker string, operation int64, side int64, price float64, size decimal.Decimal, isSmartDepth bool)
 	UpdateNewsBulletin(msgID int64, msgType int64, newsMessage string, originExchange string)
 	ManagedAccounts(accountsList []string)
 	ReceiveFA(faData int64, cxml string)
@@ -37,7 +38,7 @@ type IbWrapper interface {
 	TickString(reqID int64, tickType int64, value string)
 	TickEFP(reqID int64, tickType int64, basisPoints float64, formattedBasisPoints string, totalDividends float64, holdDays int64, futureLastTradeDate string, dividendImpact float64, dividendsToLastTradeDate float64)
 	CurrentTime(t time.Time)
-	RealtimeBar(reqID int64, time int64, open float64, high float64, low float64, close float64, volume int64, wap float64, count int64)
+	RealtimeBar(reqID int64, time int64, open float64, high float64, low float64, close float64, volume decimal.Decimal, wap decimal.Decimal, count int64)
 	FundamentalData(reqID int64, data string)
 	ContractDetailsEnd(reqID int64)
 	OpenOrderEnd()
@@ -46,7 +47,7 @@ type IbWrapper interface {
 	DeltaNeutralValidation(reqID int64, deltaNeutralContract DeltaNeutralContract)
 	TickSnapshotEnd(reqID int64)
 	MarketDataType(reqID int64, marketDataType int64)
-	Position(account string, contract *Contract, position float64, avgCost float64)
+	Position(account string, contract *Contract, position decimal.Decimal, avgCost float64)
 	PositionEnd()
 	AccountSummary(reqID int64, account string, tag string, value string, currency string)
 	AccountSummaryEnd(reqID int64)
@@ -56,7 +57,7 @@ type IbWrapper interface {
 	DisplayGroupUpdated(reqID int64, contractInfo string)
 	VerifyAndAuthMessageAPI(apiData string, xyzChallange string)
 	VerifyAndAuthCompleted(isSuccessful bool, err string)
-	PositionMulti(reqID int64, account string, modelCode string, contract *Contract, position float64, avgCost float64)
+	PositionMulti(reqID int64, account string, modelCode string, contract *Contract, position decimal.Decimal, avgCost float64)
 	PositionMultiEnd(reqID int64)
 	AccountUpdateMulti(reqID int64, account string, modleCode string, tag string, value string, currency string)
 	AccountUpdateMultiEnd(reqID int64)
@@ -79,12 +80,12 @@ type IbWrapper interface {
 	RerouteMktDepthReq(reqID int64, contractID int64, exchange string)
 	MarketRule(marketRuleID int64, priceIncrements []PriceIncrement)
 	Pnl(reqID int64, dailyPnL float64, unrealizedPnL float64, realizedPnL float64)
-	PnlSingle(reqID int64, position int64, dailyPnL float64, unrealizedPnL float64, realizedPnL float64, value float64)
+	PnlSingle(reqID int64, position decimal.Decimal, dailyPnL float64, unrealizedPnL float64, realizedPnL float64, value float64)
 	HistoricalTicks(reqID int64, ticks []HistoricalTick, done bool)
 	HistoricalTicksBidAsk(reqID int64, ticks []HistoricalTickBidAsk, done bool)
 	HistoricalTicksLast(reqID int64, ticks []HistoricalTickLast, done bool)
-	TickByTickAllLast(reqID int64, tickType int64, time int64, price float64, size int64, tickAttribLast TickAttribLast, exchange string, specialConditions string)
-	TickByTickBidAsk(reqID int64, time int64, bidPrice float64, askPrice float64, bidSize int64, askSize int64, tickAttribBidAsk TickAttribBidAsk)
+	TickByTickAllLast(reqID int64, tickType int64, time int64, price float64, size decimal.Decimal, tickAttribLast TickAttribLast, exchange string, specialConditions string)
+	TickByTickBidAsk(reqID int64, time int64, bidPrice float64, askPrice float64, bidSize decimal.Decimal, askSize decimal.Decimal, tickAttribBidAsk TickAttribBidAsk)
 	TickByTickMidPoint(reqID int64, time int64, midPoint float64)
 	OrderBound(reqID int64, apiClientID int64, apiOrderID int64)
 	CompletedOrder(contract *Contract, order *Order, orderState *OrderState)
@@ -193,12 +194,12 @@ func (w Wrapper) DisplayGroupUpdated(reqID int64, contractInfo string) {
 	log.With(zap.Int64("reqID", reqID)).Info("<DisplayGroupUpdated>", zap.String("contractInfo", contractInfo))
 }
 
-func (w Wrapper) PositionMulti(reqID int64, account string, modelCode string, contract *Contract, position float64, avgCost float64) {
+func (w Wrapper) PositionMulti(reqID int64, account string, modelCode string, contract *Contract, position decimal.Decimal, avgCost float64) {
 	log.With(zap.Int64("reqID", reqID)).Info("<PositionMulti>",
 		zap.String("account", account),
 		zap.String("modelCode", modelCode),
 		zap.Any("contract", contract),
-		zap.Float64("position", position),
+		zap.Float64("position", position.InexactFloat64()),
 		zap.Float64("avgCost", avgCost),
 	)
 }
@@ -207,10 +208,10 @@ func (w Wrapper) PositionMultiEnd(reqID int64) {
 	log.With(zap.Int64("reqID", reqID)).Info("<PositionMultiEnd>")
 }
 
-func (w Wrapper) UpdatePortfolio(contract *Contract, position float64, marketPrice float64, marketValue float64, averageCost float64, unrealizedPNL float64, realizedPNL float64, accName string) {
+func (w Wrapper) UpdatePortfolio(contract *Contract, position decimal.Decimal, marketPrice float64, marketValue float64, averageCost float64, unrealizedPNL float64, realizedPNL float64, accName string) {
 	log.Info("<UpdatePortfolio>",
 		zap.String("localSymbol", contract.LocalSymbol),
-		zap.Float64("position", position),
+		zap.Float64("position", position.InexactFloat64()),
 		zap.Float64("marketPrice", marketPrice),
 		zap.Float64("averageCost", averageCost),
 		zap.Float64("unrealizedPNL", unrealizedPNL),
@@ -219,11 +220,11 @@ func (w Wrapper) UpdatePortfolio(contract *Contract, position float64, marketPri
 	)
 }
 
-func (w Wrapper) Position(account string, contract *Contract, position float64, avgCost float64) {
+func (w Wrapper) Position(account string, contract *Contract, position decimal.Decimal, avgCost float64) {
 	log.Info("<UpdatePortfolio>",
 		zap.String("account", account),
 		zap.Any("contract", contract),
-		zap.Float64("position", position),
+		zap.Float64("position", position.InexactFloat64()),
 		zap.Float64("avgCost", avgCost),
 	)
 }
@@ -240,7 +241,7 @@ func (w Wrapper) Pnl(reqID int64, dailyPnL float64, unrealizedPnL float64, reali
 	)
 }
 
-func (w Wrapper) PnlSingle(reqID int64, position int64, dailyPnL float64, unrealizedPnL float64, realizedPnL float64, value float64) {
+func (w Wrapper) PnlSingle(reqID int64, position decimal.Decimal, dailyPnL float64, unrealizedPnL float64, realizedPnL float64, value float64) {
 	log.With(zap.Int64("reqID", reqID)).Info("<PNLSingle>",
 		zap.Float64("dailyPnL", dailyPnL),
 		zap.Float64("unrealizedPnL", unrealizedPnL),
@@ -262,11 +263,11 @@ func (w Wrapper) OpenOrderEnd() {
 
 }
 
-func (w Wrapper) OrderStatus(orderID int64, status string, filled float64, remaining float64, avgFillPrice float64, permID int64, parentID int64, lastFillPrice float64, clientID int64, whyHeld string, mktCapPrice float64) {
+func (w Wrapper) OrderStatus(orderID int64, status string, filled decimal.Decimal, remaining decimal.Decimal, avgFillPrice float64, permID int64, parentID int64, lastFillPrice float64, clientID int64, whyHeld string, mktCapPrice float64) {
 	log.With(zap.Int64("orderID", orderID)).Info("<OrderStatus>",
 		zap.String("status", status),
-		zap.Float64("filled", filled),
-		zap.Float64("remaining", remaining),
+		zap.Float64("filled", filled.InexactFloat64()),
+		zap.Float64("remaining", remaining.InexactFloat64()),
 		zap.Float64("avgFillPrice", avgFillPrice),
 	)
 }
@@ -336,15 +337,15 @@ func (w Wrapper) MarketRule(marketRuleID int64, priceIncrements []PriceIncrement
 	)
 }
 
-func (w Wrapper) RealtimeBar(reqID int64, time int64, open float64, high float64, low float64, close float64, volume int64, wap float64, count int64) {
+func (w Wrapper) RealtimeBar(reqID int64, time int64, open float64, high float64, low float64, close float64, volume decimal.Decimal, wap decimal.Decimal, count int64) {
 	log.With(zap.Int64("reqID", reqID)).Info("<RealtimeBar>",
 		zap.Int64("time", time),
 		zap.Float64("open", open),
 		zap.Float64("high", high),
 		zap.Float64("low", low),
 		zap.Float64("close", close),
-		zap.Int64("volume", volume),
-		zap.Float64("wap", wap),
+		zap.Float64("volume", volume.InexactFloat64()),
+		zap.Float64("wap", wap.InexactFloat64()),
 		zap.Int64("count", count),
 	)
 }
@@ -395,10 +396,10 @@ func (w Wrapper) HistoricalTicksLast(reqID int64, ticks []HistoricalTickLast, do
 	)
 }
 
-func (w Wrapper) TickSize(reqID int64, tickType int64, size int64) {
+func (w Wrapper) TickSize(reqID int64, tickType int64, size decimal.Decimal) {
 	log.With(zap.Int64("reqID", reqID)).Info("<TickSize>",
 		zap.Int64("tickType", tickType),
-		zap.Int64("size", size),
+		zap.Float64("size", size.InexactFloat64()),
 	)
 }
 
@@ -412,22 +413,22 @@ func (w Wrapper) MarketDataType(reqID int64, marketDataType int64) {
 	)
 }
 
-func (w Wrapper) TickByTickAllLast(reqID int64, tickType int64, time int64, price float64, size int64, tickAttribLast TickAttribLast, exchange string, specialConditions string) {
+func (w Wrapper) TickByTickAllLast(reqID int64, tickType int64, time int64, price float64, size decimal.Decimal, tickAttribLast TickAttribLast, exchange string, specialConditions string) {
 	log.With(zap.Int64("reqID", reqID)).Info("<TickByTickAllLast>",
 		zap.Int64("tickType", tickType),
 		zap.Int64("time", time),
 		zap.Float64("price", price),
-		zap.Int64("size", size),
+		zap.Int64("size", int64(size.InexactFloat64())),
 	)
 }
 
-func (w Wrapper) TickByTickBidAsk(reqID int64, time int64, bidPrice float64, askPrice float64, bidSize int64, askSize int64, tickAttribBidAsk TickAttribBidAsk) {
+func (w Wrapper) TickByTickBidAsk(reqID int64, time int64, bidPrice float64, askPrice float64, bidSize decimal.Decimal, askSize decimal.Decimal, tickAttribBidAsk TickAttribBidAsk) {
 	log.With(zap.Int64("reqID", reqID)).Info("<TickByTickBidAsk>",
 		zap.Int64("time", time),
 		zap.Float64("bidPrice", bidPrice),
 		zap.Float64("askPrice", askPrice),
-		zap.Int64("bidPrice", bidSize),
-		zap.Int64("askPrice", askSize),
+		zap.Int64("bidPrice", int64(bidSize.InexactFloat64())),
+		zap.Int64("askPrice", int64(askSize.InexactFloat64())),
 	)
 }
 
@@ -472,35 +473,39 @@ func (w Wrapper) MktDepthExchanges(depthMktDataDescriptions []DepthMktDataDescri
 	)
 }
 
-/*Returns the order book.
+/*
+Returns the order book.
 
 tickerId -  the request's identifier
 position -  the order book's row being updated
 operation - how to refresh the row:
+
 	0 = insert (insert this new order into the row identified by 'position')
 	1 = update (update the existing order in the row identified by 'position')
 	2 = delete (delete the existing order at the row identified by 'position').
+
 side -  0 for ask, 1 for bid
 price - the order's price
-size -  the order's size*/
-func (w Wrapper) UpdateMktDepth(reqID int64, position int64, operation int64, side int64, price float64, size int64) {
+size -  the order's size
+*/
+func (w Wrapper) UpdateMktDepth(reqID int64, position int64, operation int64, side int64, price float64, size decimal.Decimal) {
 	log.With(zap.Int64("reqID", reqID)).Info("<UpdateMktDepth>",
 		zap.Int64("position", position),
 		zap.Int64("operation", operation),
 		zap.Int64("side", side),
 		zap.Float64("price", price),
-		zap.Int64("size", size),
+		zap.Int64("size", int64(size.InexactFloat64())),
 	)
 }
 
-func (w Wrapper) UpdateMktDepthL2(reqID int64, position int64, marketMaker string, operation int64, side int64, price float64, size int64, isSmartDepth bool) {
+func (w Wrapper) UpdateMktDepthL2(reqID int64, position int64, marketMaker string, operation int64, side int64, price float64, size decimal.Decimal, isSmartDepth bool) {
 	log.With(zap.Int64("reqID", reqID)).Info("<UpdateMktDepthL2>",
 		zap.Int64("position", position),
 		zap.String("marketMaker", marketMaker),
 		zap.Int64("operation", operation),
 		zap.Int64("side", side),
 		zap.Float64("price", price),
-		zap.Int64("size", size),
+		zap.Int64("size", int64(size.InexactFloat64())),
 		zap.Bool("isSmartDepth", isSmartDepth),
 	)
 }

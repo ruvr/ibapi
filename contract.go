@@ -1,8 +1,12 @@
 package ibapi
 
-import "fmt"
+import (
+	"fmt"
 
-//Contract describes an instrument's definition
+	"github.com/shopspring/decimal"
+)
+
+// Contract describes an instrument's definition
 type Contract struct {
 	ContractID      int64
 	Symbol          string
@@ -42,7 +46,7 @@ func (c Contract) String() string {
 	case "OPT":
 		basicStr += fmt.Sprintf(", Expiry: %s, Strike: %f, Right: %s, SecurityID: %s, SecurityIDType: %s>", c.Expiry, c.Strike, c.Right, c.SecurityID, c.SecurityIDType)
 	default:
-		basicStr += fmt.Sprint(">")
+		basicStr += ">"
 	}
 
 	for i, leg := range c.ComboLegs {
@@ -79,26 +83,29 @@ type ContractDetails struct {
 	ValidExchanges string
 	PriceMagnifier int64
 
-	UnderContractID    int64
-	LongName           string
-	ContractMonth      string
-	Industry           string
-	Category           string
-	Subcategory        string
-	TimezoneID         string
-	TradingHours       string
-	LiquidHours        string
-	EVRule             string
-	EVMultiplier       int64
-	MdSizeMultiplier   int64
-	AggGroup           int64
-	UnderSymbol        string
-	UnderSecurityType  string
-	MarketRuleIDs      string
-	SecurityIDList     []TagValue
-	RealExpirationDate string
-	LastTradeTime      string
-	StockType          string
+	UnderContractID        int64
+	LongName               string
+	ContractMonth          string
+	Industry               string
+	Category               string
+	Subcategory            string
+	TimezoneID             string
+	TradingHours           string
+	LiquidHours            string
+	EVRule                 string
+	EVMultiplier           int64
+	MdSizeMultiplier       int64
+	AggGroup               int64
+	UnderSymbol            string
+	UnderSecurityType      string
+	MarketRuleIDs          string
+	SecurityIDList         []TagValue
+	RealExpirationDate     string
+	LastTradeTime          string
+	StockType              string
+	MinSize                decimal.Decimal `default:"UNSETDECIMAL"`
+	SizeIncement           decimal.Decimal `default:"UNSETDECIMAL"`
+	SuggestedSizeIncrement decimal.Decimal `default:"UNSETDECIMAL"`
 
 	// BOND values
 	Cusip             string

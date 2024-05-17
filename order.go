@@ -2,6 +2,8 @@ package ibapi
 
 import (
 	"fmt"
+
+	"github.com/shopspring/decimal"
 )
 
 const (
@@ -17,13 +19,13 @@ const (
 	AUCTION_TRANSPARENT
 )
 
-//Order is the origin type of order,do not try to new one unless you definitely know how to fill all the fields!Use NewDefaultOrder instead!
+// Order is the origin type of order,do not try to new one unless you definitely know how to fill all the fields!Use NewDefaultOrder instead!
 type Order struct {
 	OrderID                       int64
 	ClientID                      int64
 	PermID                        int64
 	Action                        string
-	TotalQuantity                 float64
+	TotalQuantity                 decimal.Decimal
 	OrderType                     string
 	LimitPrice                    float64 `default:"UNSETFLOAT"`
 	AuxPrice                      float64 `default:"UNSETFLOAT"`
@@ -189,7 +191,7 @@ type Order struct {
 	DiscretionaryUpToLimitPrice bool
 
 	AutoCancelDate       string
-	FilledQuantity       float64 `default:"UNSETFLOAT"`
+	FilledQuantity       decimal.Decimal `default:"UNSETDECIMAL"`
 	RefFuturesConID      int64
 	AutoCancelParent     bool
 	Shareholder          string
@@ -201,17 +203,25 @@ type Order struct {
 	Duration         int64 `default:"UNSETINT"`
 	PostToAts        int64 `default:"UNSETINT"`
 
+	AdvancedErrorOverride    string  `default:""`
+	ManualOrderTime          string  `default:""`
+	MinTradeQty              int64   `default:"UNSETINT"`
+	MinCompeteSize           int64   `default:"UNSETINT"`
+	CompeteAgainstBestOffset float64 `default:"UNSETFLOAT"`
+	MidOffsetAtWhole         float64 `default:"UNSETFLOAT"`
+	MidOffsetAtHalf          float64 `default:"UNSETFLOAT"`
+
 	SoftDollarTier SoftDollarTier
 }
 
 func (o Order) String() string {
-	s := fmt.Sprintf("Order<OrderID: %d, ClientID: %d, PermID: %d> -- <%s %s %.2f@%f %s> --",
+	s := fmt.Sprintf("Order<OrderID: %d, ClientID: %d, PermID: %d> -- <%s %s %f@%f %s> --",
 		o.OrderID,
 		o.ClientID,
 		o.PermID,
 		o.OrderType,
 		o.Action,
-		o.TotalQuantity,
+		o.TotalQuantity.InexactFloat64(),
 		o.LimitPrice,
 		o.TIF)
 
@@ -325,7 +335,7 @@ func NewOrder() *Order {
 	order.LimitPriceOffset = UNSETFLOAT
 
 	order.CashQty = UNSETFLOAT
-	order.FilledQuantity = UNSETFLOAT
+	order.FilledQuantity = UNSETDECIMAL
 	order.Duration = UNSETINT
 	order.PostToAts = UNSETINT
 
@@ -333,7 +343,7 @@ func NewOrder() *Order {
 }
 
 // NewLimitOrder create a limit order with action, limit price and quantity
-func NewLimitOrder(action string, lmtPrice float64, quantity float64) *Order {
+func NewLimitOrder(action string, lmtPrice float64, quantity decimal.Decimal) *Order {
 	o := NewOrder()
 	o.OrderType = "LMT"
 	o.Action = action
@@ -344,7 +354,7 @@ func NewLimitOrder(action string, lmtPrice float64, quantity float64) *Order {
 }
 
 // NewMarketOrder create a market order with action and quantity
-func NewMarketOrder(action string, quantity float64) *Order {
+func NewMarketOrder(action string, quantity decimal.Decimal) *Order {
 	o := NewOrder()
 	o.OrderType = "MKT"
 	o.Action = action

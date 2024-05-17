@@ -14,7 +14,6 @@ type IbConnection struct {
 	*net.TCPConn
 	host         string
 	port         int
-	clientID     int64
 	state        int
 	numBytesSent int
 	numMsgSent   int
@@ -42,10 +41,6 @@ func (ibconn *IbConnection) Read(bs []byte) (int, error) {
 	log.Debug("conn read", zap.Int("nBytes", n))
 
 	return n, err
-}
-
-func (ibconn *IbConnection) setState(state int) {
-	ibconn.state = state
 }
 
 func (ibconn *IbConnection) reset() {

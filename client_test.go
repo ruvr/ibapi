@@ -25,7 +25,7 @@ func TestClient(t *testing.T) {
 
 	ic := NewIbClient(new(Wrapper))
 
-	if err := ic.Connect("localhost", 7497, 100); err != nil {
+	if err := ic.Connect("localhost", 4002, 100); err != nil {
 		log.Panic("failed to connect", zap.Error(err))
 	}
 
@@ -181,7 +181,6 @@ func TestClientReconnect(t *testing.T) {
 			ic.Disconnect()
 		})
 	}
-
 }
 
 func TestClientWithContext(t *testing.T) {
@@ -296,7 +295,7 @@ func TestPlaceOrder(t *testing.T) {
 	ibwrapper := new(Wrapper)
 	ic := NewIbClient(ibwrapper)
 
-	err = ic.Connect("localhost", 7497, 0)
+	err = ic.Connect("localhost", 4002, 0)
 	if err != nil {
 		log.Panic("failed to connect", zap.Error(err))
 	}

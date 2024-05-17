@@ -2,6 +2,8 @@ package ibapi
 
 import (
 	"fmt"
+
+	"github.com/shopspring/decimal"
 )
 
 // Account ...
@@ -128,19 +130,18 @@ func (b BarData) String() string {
 
 // RealTimeBar ...
 type RealTimeBar struct {
-	Time    int64
-	endTime int64
-	Open    float64
-	High    float64
-	Low     float64
-	Close   float64
-	Volume  int64
-	Wap     float64
-	Count   int64
+	Time   int64
+	Open   float64
+	High   float64
+	Low    float64
+	Close  float64
+	Volume decimal.Decimal
+	Wap    decimal.Decimal
+	Count  int64
 }
 
 func (rb RealTimeBar) String() string {
-	return fmt.Sprintf("RealTimeBar<Time: %d, Open: %f, High: %f, Low: %f, Close: %f, Volume: %d, Wap: %f, Count: %d>",
+	return fmt.Sprintf("RealTimeBar<Time: %d, Open: %f, High: %f, Low: %f, Close: %f, Volume: %v, Wap: %v, Count: %d>",
 		rb.Time,
 		rb.Open,
 		rb.High,

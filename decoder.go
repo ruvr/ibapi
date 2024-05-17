@@ -168,7 +168,7 @@ func (d *ibDecoder) wrapTickSize(msgBuf *MsgBuffer) {
 	_ = msgBuf.readString()
 	reqID := msgBuf.readInt()
 	tickType := msgBuf.readInt()
-	size := msgBuf.readInt()
+	size := msgBuf.readDecimal()
 	d.wrapper.TickSize(reqID, tickType, size)
 }
 
@@ -235,7 +235,7 @@ func (d *ibDecoder) wrapUpdateMktDepth(msgBuf *MsgBuffer) {
 	operation := msgBuf.readInt()
 	side := msgBuf.readInt()
 	price := msgBuf.readFloat()
-	size := msgBuf.readInt()
+	size := msgBuf.readDecimal()
 
 	d.wrapper.UpdateMktDepth(reqID, position, operation, side, price, size)
 
@@ -249,7 +249,7 @@ func (d *ibDecoder) wrapUpdateMktDepthL2(msgBuf *MsgBuffer) {
 	operation := msgBuf.readInt()
 	side := msgBuf.readInt()
 	price := msgBuf.readFloat()
-	size := msgBuf.readInt()
+	size := msgBuf.readDecimal()
 	isSmartDepth := msgBuf.readBool()
 
 	d.wrapper.UpdateMktDepthL2(reqID, position, marketMaker, operation, side, price, size, isSmartDepth)
@@ -478,7 +478,7 @@ func (d *ibDecoder) processTickPriceMsg(msgBuf *MsgBuffer) {
 	reqID := msgBuf.readInt()
 	tickType := msgBuf.readInt()
 	price := msgBuf.readFloat()
-	size := msgBuf.readInt()
+	size := msgBuf.readDecimal()
 	attrMask := msgBuf.readInt()
 
 	attrib := TickAttrib{}
@@ -525,9 +525,8 @@ func (d *ibDecoder) processOrderStatusMsg(msgBuf *MsgBuffer) {
 	orderID := msgBuf.readInt()
 	status := msgBuf.readString()
 
-	filled := msgBuf.readFloat()
-
-	remaining := msgBuf.readFloat()
+	filled := msgBuf.readDecimal()
+	remaining := msgBuf.readDecimal()
 
 	avgFilledPrice := msgBuf.readFloat()
 
@@ -579,11 +578,7 @@ func (d *ibDecoder) processOpenOrder(msgBuf *MsgBuffer) {
 
 	// read order fields
 	o.Action = msgBuf.readString()
-	if d.version >= mMIN_SERVER_VER_FRACTIONAL_POSITIONS {
-		o.TotalQuantity = msgBuf.readFloat()
-	} else {
-		o.TotalQuantity = float64(msgBuf.readInt())
-	}
+	o.TotalQuantity = msgBuf.readDecimal()
 	o.OrderType = msgBuf.readString()
 	if version < 29 {
 		o.LimitPrice = msgBuf.readFloat()
@@ -912,7 +907,16 @@ func (d *ibDecoder) processOpenOrder(msgBuf *MsgBuffer) {
 	if d.version >= mMIN_SERVER_VER_POST_TO_ATS {
 		o.PostToAts = msgBuf.readIntCheckUnset()
 	}
-
+	if d.version >= mMIN_SERVER_VER_AUTO_CANCEL_PARENT {
+		o.AutoCancelParent = msgBuf.readBool()
+	}
+	if d.version >= mMIN_SERVER_VER_PEGBEST_PEGMID_OFFSETS {
+		o.MinTradeQty = msgBuf.readInt()
+		o.MinCompeteSize = msgBuf.readInt()
+		o.CompeteAgainstBestOffset = msgBuf.readFloatCheckUnset()
+		o.MidOffsetAtWhole = msgBuf.readFloatCheckUnset()
+		o.MidOffsetAtHalf = msgBuf.readFloatCheckUnset()
+	}
 	d.wrapper.OpenOrder(o.OrderID, c, o, orderState)
 
 }
@@ -936,12 +940,7 @@ func (d *ibDecoder) processPortfolioValueMsg(msgBuf *MsgBuffer) {
 	if v >= 8 {
 		c.TradingClass = msgBuf.readString()
 	}
-	var position float64
-	if d.version >= mMIN_SERVER_VER_FRACTIONAL_POSITIONS {
-		position = msgBuf.readFloat()
-	} else {
-		position = float64(msgBuf.readInt())
-	}
+	position := msgBuf.readDecimal()
 	marketPrice := msgBuf.readFloat()
 	marketValue := msgBuf.readFloat()
 	averageCost := msgBuf.readFloat()
@@ -957,7 +956,11 @@ func (d *ibDecoder) processPortfolioValueMsg(msgBuf *MsgBuffer) {
 }
 
 func (d *ibDecoder) processContractDataMsg(msgBuf *MsgBuffer) {
-	v := msgBuf.readInt()
+	var v int64 = 8
+	if d.version < mMIN_SERVER_VER_SIZE_RULES {
+		v = msgBuf.readInt()
+	}
+
 	var reqID int64 = -1
 	if v >= 3 {
 		reqID = msgBuf.readInt()
@@ -990,7 +993,7 @@ func (d *ibDecoder) processContractDataMsg(msgBuf *MsgBuffer) {
 	cd.Contract.TradingClass = msgBuf.readString()
 	cd.Contract.ContractID = msgBuf.readInt()
 	cd.MinTick = msgBuf.readFloat()
-	if d.version >= mMIN_SERVER_VER_MD_SIZE_MULTIPLIER {
+	if d.version >= mMIN_SERVER_VER_MD_SIZE_MULTIPLIER && d.version < mMIN_SERVER_VER_SIZE_RULES {
 		cd.MdSizeMultiplier = msgBuf.readInt()
 	}
 	cd.Contract.Multiplier = msgBuf.readString()
@@ -1052,6 +1055,16 @@ func (d *ibDecoder) processContractDataMsg(msgBuf *MsgBuffer) {
 
 	if d.version >= mMIN_SERVER_VER_STOCK_TYPE {
 		cd.StockType = msgBuf.readString()
+	}
+
+	if d.version >= mMIN_SERVER_VER_FRACTIONAL_SIZE_SUPPORT && d.version < mMIN_SERVER_VER_SIZE_RULES {
+		_ = msgBuf.readDecimal() // not used anymore
+	}
+
+	if d.version >= mMIN_SERVER_VER_SIZE_RULES {
+		cd.MinSize = msgBuf.readDecimal()
+		cd.SizeIncement = msgBuf.readDecimal()
+		cd.SuggestedSizeIncrement = msgBuf.readDecimal()
 	}
 
 	d.wrapper.ContractDetails(reqID, &cd)
@@ -1136,6 +1149,12 @@ func (d *ibDecoder) processBondContractDataMsg(msgBuf *MsgBuffer) {
 
 	if d.version >= mMIN_SERVER_VER_MARKET_RULES {
 		c.MarketRuleIDs = msgBuf.readString()
+	}
+
+	if d.version >= mMIN_SERVER_VER_SIZE_RULES {
+		c.MinSize = msgBuf.readDecimal()
+		c.SizeIncement = msgBuf.readDecimal()
+		c.SuggestedSizeIncrement = msgBuf.readDecimal()
 	}
 
 	d.wrapper.BondContractDetails(reqID, c)
@@ -1294,8 +1313,8 @@ func (d *ibDecoder) processRealTimeBarMsg(msgBuf *MsgBuffer) {
 	rtb.High = msgBuf.readFloat()
 	rtb.Low = msgBuf.readFloat()
 	rtb.Close = msgBuf.readFloat()
-	rtb.Volume = msgBuf.readInt()
-	rtb.Wap = msgBuf.readFloat()
+	rtb.Volume = msgBuf.readDecimal()
+	rtb.Wap = msgBuf.readDecimal()
 	rtb.Count = msgBuf.readInt()
 
 	d.wrapper.RealtimeBar(reqID, rtb.Time, rtb.Open, rtb.High, rtb.Low, rtb.Close, rtb.Volume, rtb.Wap, rtb.Count)
@@ -1435,12 +1454,7 @@ func (d *ibDecoder) processPositionDataMsg(msgBuf *MsgBuffer) {
 		c.TradingClass = msgBuf.readString()
 	}
 
-	var p float64
-	if d.version >= mMIN_SERVER_VER_FRACTIONAL_POSITIONS {
-		p = msgBuf.readFloat()
-	} else {
-		p = float64(msgBuf.readInt())
-	}
+	p := msgBuf.readDecimal()
 
 	var avgCost float64
 	if v >= 3 {
@@ -1470,7 +1484,7 @@ func (d *ibDecoder) processPositionMultiMsg(msgBuf *MsgBuffer) {
 	c.LocalSymbol = msgBuf.readString()
 	c.TradingClass = msgBuf.readString()
 
-	p := msgBuf.readFloat()
+	p := msgBuf.readDecimal()
 	avgCost := msgBuf.readFloat()
 	modelCode := msgBuf.readString()
 
@@ -1728,7 +1742,7 @@ func (d *ibDecoder) processPnLMsg(msgBuf *MsgBuffer) {
 }
 func (d *ibDecoder) processPnLSingleMsg(msgBuf *MsgBuffer) {
 	reqID := msgBuf.readInt()
-	position := msgBuf.readInt()
+	position := msgBuf.readDecimal()
 	dailyPnL := msgBuf.readFloat()
 	var unrealizedPnL float64
 	var realizedPnL float64
@@ -1824,7 +1838,7 @@ func (d *ibDecoder) processTickByTickMsg(msgBuf *MsgBuffer) {
 	case 0:
 	case 1, 2:
 		price := msgBuf.readFloat()
-		size := msgBuf.readInt()
+		size := msgBuf.readDecimal()
 
 		mask := msgBuf.readInt()
 		tickAttribLast := TickAttribLast{}
@@ -1838,8 +1852,8 @@ func (d *ibDecoder) processTickByTickMsg(msgBuf *MsgBuffer) {
 	case 3:
 		bidPrice := msgBuf.readFloat()
 		askPrice := msgBuf.readFloat()
-		bidSize := msgBuf.readInt()
-		askSize := msgBuf.readInt()
+		bidSize := msgBuf.readDecimal()
+		askSize := msgBuf.readDecimal()
 
 		mask := msgBuf.readInt()
 		tickAttribBidAsk := TickAttribBidAsk{}
@@ -1863,6 +1877,7 @@ func (d *ibDecoder) processOrderBoundMsg(msgBuf *MsgBuffer) {
 
 }
 
+/*
 func (d *ibDecoder) processMarketDepthL2Msg(msgBuf *MsgBuffer) {
 	_ = msgBuf.readString()
 	_ = msgBuf.readInt()
@@ -1873,7 +1888,7 @@ func (d *ibDecoder) processMarketDepthL2Msg(msgBuf *MsgBuffer) {
 	operation := msgBuf.readInt()
 	side := msgBuf.readInt()
 	price := msgBuf.readFloat()
-	size := msgBuf.readInt()
+	size := msgBuf.readDecimal()
 
 	isSmartDepth := false
 	if d.version >= mMIN_SERVER_VER_SMART_DEPTH {
@@ -1882,6 +1897,7 @@ func (d *ibDecoder) processMarketDepthL2Msg(msgBuf *MsgBuffer) {
 
 	d.wrapper.UpdateMktDepthL2(reqID, position, marketMaker, operation, side, price, size, isSmartDepth)
 }
+*/
 
 func (d *ibDecoder) processCompletedOrderMsg(msgBuf *MsgBuffer) {
 	o := &Order{}
@@ -1910,11 +1926,7 @@ func (d *ibDecoder) processCompletedOrderMsg(msgBuf *MsgBuffer) {
 	}
 
 	o.Action = msgBuf.readString()
-	if d.version >= mMIN_SERVER_VER_FRACTIONAL_POSITIONS {
-		o.TotalQuantity = msgBuf.readFloat()
-	} else {
-		o.TotalQuantity = float64(msgBuf.readInt())
-	}
+	o.TotalQuantity = msgBuf.readDecimal()
 
 	o.OrderType = msgBuf.readString()
 	if version < 29 {
@@ -2165,7 +2177,7 @@ func (d *ibDecoder) processCompletedOrderMsg(msgBuf *MsgBuffer) {
 	}
 
 	o.AutoCancelDate = msgBuf.readString()
-	o.FilledQuantity = msgBuf.readFloat()
+	o.FilledQuantity = msgBuf.readDecimal()
 	o.RefFuturesConID = msgBuf.readInt()
 	o.AutoCancelParent = msgBuf.readBool()
 	o.Shareholder = msgBuf.readString()

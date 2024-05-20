@@ -215,13 +215,13 @@ type Order struct {
 }
 
 func (o Order) String() string {
-	s := fmt.Sprintf("Order<OrderID: %d, ClientID: %d, PermID: %d> -- <%s %s %f@%f %s> --",
+	s := fmt.Sprintf("Order<OrderID: %d, ClientID: %d, PermID: %d> -- <%s %s %v@%f %s> --",
 		o.OrderID,
 		o.ClientID,
 		o.PermID,
 		o.OrderType,
 		o.Action,
-		o.TotalQuantity.InexactFloat64(),
+		o.TotalQuantity,
 		o.LimitPrice,
 		o.TIF)
 

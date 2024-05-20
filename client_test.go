@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"go.uber.org/zap"
 	// "time"
 )
@@ -318,7 +319,7 @@ func TestPlaceOrder(t *testing.T) {
 
 	ic.ReqMktData(ic.GetReqID(), &aapl, "", false, false, nil)
 
-	lmtOrder := NewLimitOrder("BUY", 144, 1)
+	lmtOrder := NewLimitOrder("BUY", 144, decimal.NewFromInt(1))
 	// mktOrder := NewMarketOrder("BUY", 1)
 	ic.PlaceOrder(ibwrapper.GetNextOrderID(), &aapl, lmtOrder)
 

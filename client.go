@@ -1333,6 +1333,30 @@ func (ic *IbClient) PlaceOrder(orderID int64, contract *Contract, order *Order) 
 			fields = append(fields, order.ManualOrderTime)
 		}
 
+		if ic.serverVersion >= mMIN_SERVER_VER_PEGBEST_PEGMID_OFFSETS {
+			if contract.Exchange == "IBKRBATS" {
+				fields = append(fields, order.MinTradeQty)
+			}
+			var sendMidOffsets bool = false
+
+			if isPegBestOrder(order.OrderType) {
+				fields = append(fields, order.MinCompeteSize)
+				fields = append(fields, order.CompeteAgainstBestOffset)
+				if order.CompeteAgainstBestOffset == COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID {
+					sendMidOffsets = true
+				}
+			} else {
+				if isPegMidOrder(order.OrderType) {
+					sendMidOffsets = true
+				}
+			}
+
+			if sendMidOffsets {
+				fields = append(fields, order.MidOffsetAtWhole)
+				fields = append(fields, order.MidOffsetAtHalf)
+			}
+		}
+
 		msg := makeMsgBytes(fields...)
 
 		ic.reqChan <- msg
@@ -1700,6 +1724,11 @@ func (ic *IbClient) ReqContractDetails(reqID int64, contract *Contract) {
 		return
 	}
 
+	if ic.serverVersion < mMIN_SERVER_VER_BOND_ISSUERID && contract.IssuerID != "" {
+		ic.wrapper.Error(reqID, UPDATE_TWS.code, UPDATE_TWS.msg+"  It does not support issuerId parameter in reqContractDetails.")
+		return
+	}
+
 	// v := 8
 	const v = 8
 	fields := make([]interface{}, 0, 20)
@@ -1736,6 +1765,10 @@ func (ic *IbClient) ReqContractDetails(reqID int64, contract *Contract) {
 
 	if ic.serverVersion >= mMIN_SERVER_VER_SEC_ID_TYPE {
 		fields = append(fields, contract.SecurityIDType, contract.SecurityID)
+	}
+
+	if ic.serverVersion >= mMIN_SERVER_VER_BOND_ISSUERID {
+		fields = append(fields, contract.IssuerID)
 	}
 
 	msg := makeMsgBytes(fields...)
@@ -2029,7 +2062,13 @@ Valid values include:
 func (ic *IbClient) ReqHistoricalData(reqID int64, contract *Contract, endDateTime string, duration string, barSize string, whatToShow string, useRTH bool, formatDate int, keepUpToDate bool, chartOptions []TagValue) {
 	if ic.serverVersion < mMIN_SERVER_VER_TRADING_CLASS {
 		if contract.TradingClass != "" || contract.ContractID > 0 {
-			ic.wrapper.Error(reqID, UPDATE_TWS.code, UPDATE_TWS.msg)
+			ic.wrapper.Error(reqID, UPDATE_TWS.code, UPDATE_TWS.msg+"  It does not support conId and tradingClass parameters in reqHistoricalData.")
+		}
+	}
+
+	if ic.serverVersion < mMIN_SERVER_VER_HISTORICAL_SCHEDULE {
+		if whatToShow != "" || whatToShow == "SCHEDULE" {
+			ic.wrapper.Error(reqID, UPDATE_TWS.code, UPDATE_TWS.msg+"  It does not support requesting of historical schedule.")
 		}
 	}
 
@@ -2897,13 +2936,44 @@ func (ic *IbClient) CancelWshMetaData(reqID int64) {
 	ic.reqChan <- msg
 }
 
-func (ic *IbClient) ReqWshEventData(reqID int64, conID int64) {
+func (ic *IbClient) ReqWshEventData(reqID int64, wshEventData WshEventData) {
 	if ic.serverVersion < mMIN_SERVER_VER_WSHE_CALENDAR {
 		ic.wrapper.Error(NO_VALID_ID, UPDATE_TWS.code, UPDATE_TWS.msg+"  It does not support WSHE Calendar API.")
 		return
 	}
 
-	msg := makeMsgBytes(mREQ_WSH_META_DATA, reqID, conID)
+	if ic.serverVersion < mMIN_SERVER_VER_WSH_EVENT_DATA_FILTERS {
+		if wshEventData.Filter != "" || wshEventData.FillCompetitors || wshEventData.FillPortfolio || wshEventData.FillWatchlist {
+			ic.wrapper.Error(NO_VALID_ID, UPDATE_TWS.code, UPDATE_TWS.msg+"  It does not support WSH event data filters.")
+			return
+		}
+	}
+
+	if ic.serverVersion < mMIN_SERVER_VER_WSH_EVENT_DATA_FILTERS_DATE {
+		if wshEventData.StartDate != "" || wshEventData.EndDate != "" || wshEventData.TotalLimit != UNSETINT {
+			ic.wrapper.Error(NO_VALID_ID, UPDATE_TWS.code, UPDATE_TWS.msg+"  It does not support WSH event data date filters.")
+			return
+		}
+	}
+
+	fields := make([]interface{}, 0, 20)
+
+	fields = append(fields, mREQ_WSH_META_DATA, reqID, wshEventData.ConID)
+
+	if ic.serverVersion >= mMIN_SERVER_VER_WSH_EVENT_DATA_FILTERS {
+		fields = append(fields, wshEventData.Filter)
+		fields = append(fields, wshEventData.FillWatchlist)
+		fields = append(fields, wshEventData.FillPortfolio)
+		fields = append(fields, wshEventData.FillCompetitors)
+	}
+
+	if ic.serverVersion >= mMIN_SERVER_VER_WSH_EVENT_DATA_FILTERS_DATE {
+		fields = append(fields, wshEventData.StartDate)
+		fields = append(fields, wshEventData.EndDate)
+		fields = append(fields, wshEventData.TotalLimit)
+	}
+
+	msg := makeMsgBytes(fields...)
 
 	ic.reqChan <- msg
 }

@@ -23,6 +23,8 @@ type Contract struct {
 	IncludeExpired  bool
 	SecurityIDType  string // CUSIP;SEDOL;ISIN;RIC
 	SecurityID      string
+	Description     string
+	IssuerID        string
 
 	// combos les
 	ComboLegsDescription string

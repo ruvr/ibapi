@@ -26,6 +26,9 @@ const (
 )
 
 var UNSETDECIMAL = decimal.New(math.MaxInt64, math.MaxInt32)
+var DOUBLE_INFINITY = math.Inf(1)
+
+var COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID = DOUBLE_INFINITY
 
 var log *zap.Logger
 
@@ -437,4 +440,16 @@ func (m *MsgBuffer) Reset() {
 	m.Buffer.Reset()
 	m.bs = m.bs[:0]
 	m.err = nil
+}
+
+func isPegBestOrder(orderType string) bool {
+	return orderType == "PEG BEST" || orderType == "PEGBEST"
+}
+
+func isPegMidOrder(orderType string) bool {
+	return orderType == "PEG MID" || orderType == "PEGMID"
+}
+
+func isPegBenchOrder(orderType string) bool {
+	return orderType == "PEG BENCH" || orderType == "PEGBENCH"
 }

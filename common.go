@@ -338,3 +338,18 @@ func (t TickAttribLast) String() string {
 		t.PastLimit,
 		t.Unreported)
 }
+
+type WshEventData struct {
+	ConID           string
+	StartDate       string
+	EndDate         string
+	FillCompetitors bool
+	FillPortfolio   bool
+	FillWatchlist   bool
+	TotalLimit      int64 `default:"UNSETINT"`
+	Filter          string
+}
+
+func (w WshEventData) String() string {
+	return fmt.Sprintf("WshEventData<ConID: %s, StartDate: %s, EndDate %s, FillCompetitors: %t, FillPortfolio: %t, FillWatchlist: %t, TotalLimit: %d>", w.ConID, w.StartDate, w.EndDate, w.FillCompetitors, w.FillPortfolio, w.FillWatchlist, w.TotalLimit)
+}

@@ -23,9 +23,11 @@ func (d *ibDecoder) setVersion(version Version) {
 	d.version = version
 }
 
+/*
 func (d *ibDecoder) setWrapper(w IbWrapper) {
 	d.wrapper = w
 }
+*/
 
 func (d *ibDecoder) interpret(msgBytes []byte) {
 	msgBuf := NewMsgBuffer(msgBytes)
@@ -1067,11 +1069,19 @@ func (d *ibDecoder) processContractDataMsg(msgBuf *MsgBuffer) {
 		cd.SuggestedSizeIncrement = msgBuf.readDecimal()
 	}
 
+	/* TODO
+	if d.version >= mMIN_SERVER_VER_FUND_DATA_FIELDS && cd.Contract.SecurityType == "FUND" {
+	}
+	*/
+
 	d.wrapper.ContractDetails(reqID, &cd)
 
 }
 func (d *ibDecoder) processBondContractDataMsg(msgBuf *MsgBuffer) {
-	v := msgBuf.readInt()
+	var v int64 = 6
+	if d.version < mMIN_SERVER_VER_SIZE_RULES {
+		v = msgBuf.readInt()
+	}
 
 	var reqID int64 = -1
 
@@ -1112,7 +1122,7 @@ func (d *ibDecoder) processBondContractDataMsg(msgBuf *MsgBuffer) {
 	c.Contract.ContractID = msgBuf.readInt()
 	c.MinTick = msgBuf.readFloat()
 
-	if d.version >= mMIN_SERVER_VER_MD_SIZE_MULTIPLIER {
+	if d.version >= mMIN_SERVER_VER_MD_SIZE_MULTIPLIER && d.version < mMIN_SERVER_VER_SIZE_RULES {
 		c.MdSizeMultiplier = msgBuf.readInt()
 	}
 
@@ -1566,6 +1576,10 @@ func (d *ibDecoder) processSymbolSamplesMsg(msgBuf *MsgBuffer) {
 		for ; sdtN > 0; sdtN-- {
 			derivativeSecType := msgBuf.readString()
 			cd.DerivativeSecTypes = append(cd.DerivativeSecTypes, derivativeSecType)
+		}
+		if d.version >= mMIN_SERVER_VER_BOND_ISSUERID {
+			cd.Contract.Description = msgBuf.readString()
+			cd.Contract.IssuerID = msgBuf.readString()
 		}
 		contractDescriptions = append(contractDescriptions, cd)
 	}
@@ -2187,6 +2201,14 @@ func (d *ibDecoder) processCompletedOrderMsg(msgBuf *MsgBuffer) {
 
 	orderState.CompletedTime = msgBuf.readString()
 	orderState.CompletedStatus = msgBuf.readString()
+
+	if d.version >= mMIN_SERVER_VER_PEGBEST_PEGMID_OFFSETS {
+		o.MinTradeQty = msgBuf.readInt()
+		o.MinCompeteSize = msgBuf.readInt()
+		o.CompeteAgainstBestOffset = msgBuf.readFloatCheckUnset()
+		o.MidOffsetAtWhole = msgBuf.readFloatCheckUnset()
+		o.MidOffsetAtHalf = msgBuf.readFloatCheckUnset()
+	}
 
 	d.wrapper.CompletedOrder(c, o, orderState)
 }

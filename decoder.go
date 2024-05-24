@@ -163,6 +163,8 @@ func (d *ibDecoder) setmsgID2process() {
 		mREPLACE_FA_END:                           d.processReplaceFAEndMsg,
 		mWSH_META_DATA:                            d.processWshMetaDataMsg,
 		mWSH_EVENT_DATA:                           d.processWshEventDataMsg,
+		wHISTORICAL_SCHEDULE:                      d.processHistoricalSchedule,
+		wUSER_INFO:                                d.processUserInfoMsg,
 	}
 }
 
@@ -2238,4 +2240,31 @@ func (d *ibDecoder) processWshEventDataMsg(msgBuf *MsgBuffer) {
 	dataJson := msgBuf.readString()
 
 	d.wrapper.WshEventData(reqID, dataJson)
+}
+
+func (d *ibDecoder) processUserInfoMsg(msgBuf *MsgBuffer) {
+	reqID := msgBuf.readInt()
+	whiteBrandingId := msgBuf.readString()
+
+	d.wrapper.UserInfo(reqID, whiteBrandingId)
+}
+
+func (d *ibDecoder) processHistoricalSchedule(msgBuf *MsgBuffer) {
+	reqID := msgBuf.readInt()
+	startDateTime := msgBuf.readString()
+	endDateTime := msgBuf.readString()
+	timeZone := msgBuf.readString()
+
+	sessions := make([]HistoricalSession, 0)
+	if n := msgBuf.readInt(); n > 0 {
+		for ; n > 0; n-- {
+			session := HistoricalSession{}
+			session.StartDateTime = msgBuf.readString()
+			session.EndDateTime = msgBuf.readString()
+			session.RefDate = msgBuf.readString()
+			sessions = append(sessions, session)
+		}
+	}
+
+	d.wrapper.HistoricalSchedule(reqID, startDateTime, endDateTime, timeZone, sessions)
 }

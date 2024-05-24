@@ -353,3 +353,9 @@ type WshEventData struct {
 func (w WshEventData) String() string {
 	return fmt.Sprintf("WshEventData<ConID: %s, StartDate: %s, EndDate %s, FillCompetitors: %t, FillPortfolio: %t, FillWatchlist: %t, TotalLimit: %d>", w.ConID, w.StartDate, w.EndDate, w.FillCompetitors, w.FillPortfolio, w.FillWatchlist, w.TotalLimit)
 }
+
+type HistoricalSession struct {
+	StartDateTime string
+	EndDateTime   string
+	RefDate       string
+}

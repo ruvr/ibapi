@@ -96,6 +96,8 @@ type IbWrapper interface {
 	ReplaceFAEnd(reqID int64, text string)
 	WshMetaData(reqID int64, dataJson string)
 	WshEventData(reqID int64, dataJson string)
+	UserInfo(reqID int64, whiteBrandingId string)
+	HistoricalSchedule(reqID int64, startDateTime string, endDateTime string, timeZone string, sessions []HistoricalSession)
 }
 
 // Wrapper is the default wrapper provided by this golang implement.
@@ -687,4 +689,12 @@ func (w Wrapper) WshMetaData(reqID int64, dataJson string) {
 }
 func (w Wrapper) WshEventData(reqID int64, dataJson string) {
 	log.With(zap.Int64("reqID", reqID)).Info("<WshEventData>", zap.String("dataJson", dataJson))
+}
+
+func (w Wrapper) UserInfo(reqID int64, whiteBrandingId string) {
+	log.With(zap.Int64("reqID", reqID)).Info("<UserInfo>", zap.String("whiteBrandingId", whiteBrandingId))
+}
+
+func (w Wrapper) HistoricalSchedule(reqID int64, startDateTime string, endDateTime string, timeZone string, sessions []HistoricalSession) {
+	log.With(zap.Int64("reqID", reqID)).Info("<HistoricalSchedule>", zap.String("startDateTime", startDateTime), zap.String("endDateTime", endDateTime), zap.String("timeZone", timeZone))
 }

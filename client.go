@@ -1365,10 +1365,23 @@ func (ic *IbClient) PlaceOrder(orderID int64, contract *Contract, order *Order) 
 }
 
 // CancelOrder cancel an order by orderId
-func (ic *IbClient) CancelOrder(orderID int64) {
+func (ic *IbClient) CancelOrder(orderID int64, manualOrderCancelTime string) {
+	if ic.serverVersion < mMIN_SERVER_VER_MANUAL_ORDER_TIME && manualOrderCancelTime != "" {
+		ic.wrapper.Error(NO_VALID_ID, UPDATE_TWS.code, UPDATE_TWS.msg+"  It does not support manual order cancel time attribute.")
+		return
+	}
+
 	// v := 1
 	const v = 1
-	msg := makeMsgBytes(mCANCEL_ORDER, v, orderID)
+
+	fields := make([]interface{}, 0, 10)
+	fields = append(fields, mCANCEL_ORDER, v, orderID)
+
+	if ic.serverVersion >= mMIN_SERVER_VER_MANUAL_ORDER_TIME {
+		fields = append(fields, manualOrderCancelTime)
+	}
+
+	msg := makeMsgBytes(fields...)
 
 	ic.reqChan <- msg
 }
@@ -2985,6 +2998,18 @@ func (ic *IbClient) CancelWshEventData(reqID int64) {
 	}
 
 	msg := makeMsgBytes(mCANCEL_WSH_EVENT_DATA, reqID)
+
+	ic.reqChan <- msg
+}
+
+// Requesting White Branding Info
+func (ic *IbClient) ReqUserInfo(reqID int64) {
+	if ic.serverVersion < mMIN_SERVER_VER_USER_INFO {
+		ic.wrapper.Error(NO_VALID_ID, UPDATE_TWS.code, UPDATE_TWS.msg+"  It does not support user info requests.")
+		return
+	}
+
+	msg := makeMsgBytes(mREQ_USER_INFO, reqID)
 
 	ic.reqChan <- msg
 }

@@ -11,7 +11,7 @@ src="http://interactivebrokers.github.io/tws-api/nav_iblogo.png"
 
 ## INSTALL
 
-`go get -u github.com/hadrianl/ibapi`
+`go get -u github.com/ruvr/ibapi`
 
 ---
 

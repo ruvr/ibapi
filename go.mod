@@ -1,4 +1,4 @@
-module github.com/hadrianl/ibapi
+module github.com/ruvr/ibapi
 
 go 1.21
 

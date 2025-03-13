@@ -3,10 +3,9 @@
 package ibapi
 
 import (
+	"log/slog"
 	"net"
 	"strconv"
-
-	"go.uber.org/zap"
 )
 
 // IbConnection wrap the tcp connection with TWS or Gateway
@@ -27,7 +26,7 @@ func (ibconn *IbConnection) Write(bs []byte) (int, error) {
 	ibconn.numBytesSent += n
 	ibconn.numMsgSent++
 
-	log.Debug("conn write", zap.Int("nBytes", n))
+	log.Debug("conn write", slog.Int("nBytes", n))
 
 	return n, err
 }
@@ -38,7 +37,7 @@ func (ibconn *IbConnection) Read(bs []byte) (int, error) {
 	ibconn.numBytesRecv += n
 	ibconn.numMsgRecv++
 
-	log.Debug("conn read", zap.Int("nBytes", n))
+	log.Debug("conn read", slog.Int("nBytes", n))
 
 	return n, err
 }
@@ -52,10 +51,10 @@ func (ibconn *IbConnection) reset() {
 
 func (ibconn *IbConnection) disconnect() error {
 	log.Debug("conn disconnect",
-		zap.Int("nMsgSent", ibconn.numMsgSent),
-		zap.Int("nBytesSent", ibconn.numBytesSent),
-		zap.Int("nMsgRecv", ibconn.numMsgRecv),
-		zap.Int("nBytesRecv", ibconn.numBytesRecv),
+		slog.Int("nMsgSent", ibconn.numMsgSent),
+		slog.Int("nBytesSent", ibconn.numBytesSent),
+		slog.Int("nMsgRecv", ibconn.numMsgRecv),
+		slog.Int("nBytesRecv", ibconn.numBytesRecv),
 	)
 	return ibconn.Close()
 }
@@ -69,16 +68,16 @@ func (ibconn *IbConnection) connect(host string, port int) error {
 
 	server := ibconn.host + ":" + strconv.Itoa(port)
 	if addr, err = net.ResolveTCPAddr("tcp4", server); err != nil {
-		log.Error("failed to resove tcp address", zap.Error(err), zap.String("host", server))
+		log.Error("failed to resove tcp address", slog.Any("error", err), slog.String("host", server))
 		return err
 	}
 
 	if ibconn.TCPConn, err = net.DialTCP("tcp4", nil, addr); err != nil {
-		log.Error("failed to dial tcp", zap.Error(err), zap.Any("address", addr))
+		log.Error("failed to dial tcp", slog.Any("error", err), slog.Any("address", addr))
 		return err
 	}
 
-	log.Debug("tcp socket connected", zap.Any("address", ibconn.TCPConn.RemoteAddr()))
+	log.Debug("tcp socket connected", slog.Any("address", ibconn.TCPConn.RemoteAddr()))
 
 	return err
 }

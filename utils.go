@@ -4,13 +4,15 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+	"log/slog"
 	"math"
+	"os"
 	"reflect"
 	"strconv"
 
-	"github.com/shopspring/decimal"
-	"go.uber.org/zap"
-	// log "github.com/sirupsen/logrus"
+	"github.com/govalues/decimal"
+	"github.com/lmittmann/tint"
+	"github.com/mattn/go-isatty"
 )
 
 const (
@@ -25,26 +27,30 @@ const (
 	MAX_MSG_LEN int = 0xFFFFFF
 )
 
-var UNSETDECIMAL = decimal.New(math.MaxInt64, math.MaxInt32)
+var UNSETDECIMAL decimal.Decimal = decimal.MustNew(math.MaxInt64, 0)
 var DOUBLE_INFINITY = math.Inf(1)
 
 var COMPETE_AGAINST_BEST_OFFSET_UP_TO_MID = DOUBLE_INFINITY
 
-var log *zap.Logger
+var log *slog.Logger
 
 func init() {
-	log, _ = zap.NewProduction()
+	w := os.Stderr
+	log = slog.New(
+		tint.NewHandler(w, &tint.Options{
+			NoColor: !isatty.IsTerminal(w.Fd()),
+			Level:   slog.LevelInfo,
+		}),
+	)
 }
 
-// APILogger sets the options of internal logger for API, such as level, encoder, output, see uber.org/zap for more information
-func SetAPILogger(cfg zap.Config, opts ...zap.Option) error {
-	newlogger, err := cfg.Build(opts...)
-	log = newlogger
-	return err
+// APILogger sets the options of internal logger for API
+func SetAPILogger(logger *slog.Logger) {
+	log = slog.New(logger.Handler())
 }
 
-// GetLogger gets a clone of the internal logger with the option, see uber.org/zap for more information
-func GetLogger() *zap.Logger {
+// GetLogger gets the internal logger
+func GetLogger() *slog.Logger {
 	return log
 }
 
@@ -178,7 +184,8 @@ func makeMsgBytes(fields ...interface{}) []byte {
 		case []byte:
 			msgBytes = append(msgBytes, v...)
 		default:
-			log.Panic("failed to covert the field", zap.Reflect("field", f)) // never reach here
+			log.Error("failed to covert the field", slog.Any("field", f)) // never reach here
+			panic("ibapi: failed to covert the field")
 		}
 
 		msgBytes = append(msgBytes, fieldSplit)
@@ -257,8 +264,8 @@ func handleEmpty(d interface{}) string {
 		return v.String()
 
 	default:
-		log.Panic("no handler for such type", zap.Reflect("val", d))
-		return "" // never reach here
+		log.Error("no handler for such type", slog.Any("val", d))
+		panic("ibapi: no handler for such type")
 	}
 }
 
@@ -280,7 +287,9 @@ func InitDefault(o interface{}) {
 		if defaultValue, ok := field.Tag.Lookup("default"); ok {
 
 			switch defaultValue {
-			//TODO: add UNSETDECIMAL support
+			//TODO: check UNSETDECIMAL support
+			case "UNSETDECIMAL":
+				v.Field(i).SetBytes([]byte(UNSETDECIMAL.String()))
 			case "UNSETFLOAT":
 				v.Field(i).SetFloat(UNSETFLOAT)
 			case "UNSETINT":
@@ -290,7 +299,8 @@ func InitDefault(o interface{}) {
 			case "true":
 				v.Field(i).SetBool(true)
 			default:
-				log.Panic("Unknown defaultValue", zap.Reflect("default", v))
+				slog.Error("Unknown defaultValue", slog.Any("default", v))
+				panic("ibapi: Unknown defaultValue")
 			}
 		}
 
@@ -308,7 +318,8 @@ func (m *MsgBuffer) readInt() int64 {
 	var i int64
 	m.bs, m.err = m.ReadBytes(fieldSplit)
 	if m.err != nil {
-		log.Panic("decode int64 error", zap.Error(m.err))
+		log.Error("decode int64 error", slog.Any("error", m.err))
+		panic("ibapi: decode int64 error")
 	}
 
 	m.bs = m.bs[:len(m.bs)-1]
@@ -318,7 +329,8 @@ func (m *MsgBuffer) readInt() int64 {
 
 	i, m.err = strconv.ParseInt(string(m.bs), 10, 64)
 	if m.err != nil {
-		log.Panic("decode int64 error", zap.Error(m.err))
+		log.Error("decode int64 error", slog.Any("error", m.err))
+		panic("ibapi: decode int64 error")
 	}
 
 	return i
@@ -328,7 +340,8 @@ func (m *MsgBuffer) readIntCheckUnset() int64 {
 	var i int64
 	m.bs, m.err = m.ReadBytes(fieldSplit)
 	if m.err != nil {
-		log.Panic("decode int64 error", zap.Error(m.err))
+		log.Error("decode int64 error", slog.Any("error", m.err))
+		panic("ibapi: decode int64 error")
 	}
 
 	m.bs = m.bs[:len(m.bs)-1]
@@ -338,7 +351,8 @@ func (m *MsgBuffer) readIntCheckUnset() int64 {
 
 	i, m.err = strconv.ParseInt(string(m.bs), 10, 64)
 	if m.err != nil {
-		log.Panic("decode int64 error", zap.Error(m.err))
+		log.Error("decode int64 error", slog.Any("error", m.err))
+		panic("ibapi: decode int64 error")
 	}
 
 	return i
@@ -348,7 +362,8 @@ func (m *MsgBuffer) readFloat() float64 {
 	var f float64
 	m.bs, m.err = m.ReadBytes(fieldSplit)
 	if m.err != nil {
-		log.Panic("decode float64 error", zap.Error(m.err))
+		log.Error("decode float64 error", slog.Any("error", m.err))
+		panic("ibapi: decode float64 error")
 	}
 
 	m.bs = m.bs[:len(m.bs)-1]
@@ -358,7 +373,8 @@ func (m *MsgBuffer) readFloat() float64 {
 
 	f, m.err = strconv.ParseFloat(string(m.bs), 64)
 	if m.err != nil {
-		log.Panic("decode float64 error", zap.Error(m.err))
+		log.Error("decode float64 error", slog.Any("error", m.err))
+		panic("ibapi: decode float64 error")
 	}
 
 	return f
@@ -368,7 +384,8 @@ func (m *MsgBuffer) readFloatCheckUnset() float64 {
 	var f float64
 	m.bs, m.err = m.ReadBytes(fieldSplit)
 	if m.err != nil {
-		log.Panic("decode float64 error", zap.Error(m.err))
+		log.Error("decode float64 error", slog.Any("error", m.err))
+		panic("ibapi: decode float64 error")
 	}
 
 	m.bs = m.bs[:len(m.bs)-1]
@@ -378,7 +395,8 @@ func (m *MsgBuffer) readFloatCheckUnset() float64 {
 
 	f, m.err = strconv.ParseFloat(string(m.bs), 64)
 	if m.err != nil {
-		log.Panic("decode float64 error", zap.Error(m.err))
+		log.Error("decode float64 error", slog.Any("error", m.err))
+		panic("ibapi: decode float64 error")
 	}
 
 	return f
@@ -388,7 +406,8 @@ func (m *MsgBuffer) readDecimal() decimal.Decimal {
 	var d decimal.Decimal
 	m.bs, m.err = m.ReadBytes(fieldSplit)
 	if m.err != nil {
-		log.Panic("decode decimal error", zap.Error(m.err))
+		log.Error("decode decimal error", slog.Any("error", m.err))
+		panic("ibapi: decode decimal error")
 	}
 
 	m.bs = m.bs[:len(m.bs)-1]
@@ -396,9 +415,10 @@ func (m *MsgBuffer) readDecimal() decimal.Decimal {
 		return UNSETDECIMAL
 	}
 
-	d, m.err = decimal.NewFromString(string(m.bs))
+	d, m.err = decimal.Parse(string(m.bs))
 	if m.err != nil {
-		log.Panic("decode decimal error", zap.Error(m.err))
+		log.Error("decode decimal error", slog.Any("error", m.err))
+		panic("ibapi: decode decimal error")
 	}
 
 	return d
@@ -407,7 +427,8 @@ func (m *MsgBuffer) readDecimal() decimal.Decimal {
 func (m *MsgBuffer) readBool() bool {
 	m.bs, m.err = m.ReadBytes(fieldSplit)
 	if m.err != nil {
-		log.Panic("decode bool error", zap.Error(m.err))
+		log.Error("decode bool error", slog.Any("error", m.err))
+		panic("ibapi: decode bool error")
 	}
 
 	m.bs = m.bs[:len(m.bs)-1]
@@ -421,7 +442,7 @@ func (m *MsgBuffer) readBool() bool {
 func (m *MsgBuffer) readString() string {
 	m.bs, m.err = m.ReadBytes(fieldSplit)
 	if m.err != nil {
-		log.Panic("decode string error", zap.Error(m.err))
+		log.Error("decode string error", slog.Any("error", m.err))
 	}
 
 	return string(m.bs[:len(m.bs)-1])

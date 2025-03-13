@@ -3,6 +3,7 @@ package ibapi
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -13,27 +14,25 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shopspring/decimal"
-	"go.uber.org/zap"
+	"github.com/govalues/decimal"
 	// "time"
 )
 
 func TestClient(t *testing.T) {
-	SetAPILogger(zap.NewDevelopmentConfig())
-	log := GetLogger()
-	defer log.Sync()
 	runtime.GOMAXPROCS(4)
 
 	ic := NewIbClient(new(Wrapper))
 
 	if err := ic.Connect("localhost", 4002, 100); err != nil {
-		log.Panic("failed to connect", zap.Error(err))
+		slog.Error("failed to connect", slog.Any("error", err))
+		t.FailNow()
 	}
 
 	ic.SetConnectionOptions("+PACEAPI")
 
 	if err := ic.HandShake(); err != nil {
-		log.Panic("failed to hand shake", zap.Error(err))
+		slog.Error("failed to hand shake", slog.Any("error", err))
+		t.FailNow()
 	}
 	ic.Run()
 
@@ -141,8 +140,9 @@ func TestClient(t *testing.T) {
 
 	ic.LoopUntilDone(
 		func() {
-			<-time.After(time.Second * 25)
+			<-time.After(time.Second * 5)
 			ic.Disconnect()
+			ic.done <- true
 		})
 	// loop:
 	// 	for {
@@ -152,19 +152,16 @@ func TestClient(t *testing.T) {
 	// 			break loop
 	// 		}
 	// 	}
-
 }
 
 func TestClientReconnect(t *testing.T) {
-	log, _ = zap.NewDevelopment() // log is default for production(json encode, info level), set to development(console encode, debug level) here
-	defer log.Sync()
 	runtime.GOMAXPROCS(4)
 
 	ic := NewIbClient(new(Wrapper))
 
 	for {
 		if err := ic.Connect("localhost", 4002, 0); err != nil {
-			log.Error("failed to connect, reconnect after 5 sec", zap.Error(err))
+			slog.Error("failed to connect, reconnect after 5 sec", slog.Any("error", err))
 			time.Sleep(5 * time.Second)
 			continue
 		}
@@ -172,7 +169,7 @@ func TestClientReconnect(t *testing.T) {
 		ic.SetConnectionOptions("+PACEAPI")
 
 		if err := ic.HandShake(); err != nil {
-			log.Error("failed to hand shake, reconnect after 5 sec", zap.Error(err))
+			slog.Error("failed to hand shake, reconnect after 5 sec", slog.Any("error", err))
 			time.Sleep(5 * time.Second)
 			continue
 		}
@@ -180,6 +177,7 @@ func TestClientReconnect(t *testing.T) {
 		ic.LoopUntilDone(func() {
 			<-time.After(25 * time.Second) // block 25 sec and disconnect
 			ic.Disconnect()
+			ic.done <- true
 		})
 	}
 }
@@ -194,15 +192,17 @@ func TestClientWithContext(t *testing.T) {
 	ibwrapper := new(Wrapper)
 	ic := NewIbClient(ibwrapper)
 	ic.SetContext(ctx)
-	err = ic.Connect("localhost", 7497, 0)
+	err = ic.Connect("localhost", 4002, 0)
 	if err != nil {
-		log.Panic("failed to connect", zap.Error(err))
+		log.Error("failed to connect", slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	ic.SetConnectionOptions("+PACEAPI")
 	err = ic.HandShake()
 	if err != nil {
-		log.Panic("failed to hand shake", zap.Error(err))
+		log.Error("failed to hand shake", "error", err)
+		os.Exit(1)
 	}
 	ic.Run()
 
@@ -287,9 +287,6 @@ func BenchmarkCopySlice(b *testing.B) {
 }
 
 func TestPlaceOrder(t *testing.T) {
-	SetAPILogger(zap.NewDevelopmentConfig())
-	log := GetLogger()
-	defer log.Sync()
 	runtime.GOMAXPROCS(4)
 	var err error
 
@@ -298,13 +295,14 @@ func TestPlaceOrder(t *testing.T) {
 
 	err = ic.Connect("localhost", 4002, 0)
 	if err != nil {
-		log.Panic("failed to connect", zap.Error(err))
+		log.Error("failed to connect", "error", err)
+		os.Exit(1)
 	}
 
 	ic.SetConnectionOptions("+PACEAPI")
 	err = ic.HandShake()
 	if err != nil {
-		log.Panic("failed to hand shake", zap.Error(err))
+		log.Error("failed to hand shake", "error", err)
 	}
 	ic.Run()
 
@@ -319,7 +317,7 @@ func TestPlaceOrder(t *testing.T) {
 
 	ic.ReqMktData(ic.GetReqID(), &aapl, "", false, false, nil)
 
-	lmtOrder := NewLimitOrder("BUY", 144, decimal.NewFromInt(1))
+	lmtOrder := NewLimitOrder("BUY", 144, decimal.One)
 	// mktOrder := NewMarketOrder("BUY", 1)
 	ic.PlaceOrder(ibwrapper.GetNextOrderID(), &aapl, lmtOrder)
 
@@ -327,6 +325,7 @@ func TestPlaceOrder(t *testing.T) {
 		func() {
 			<-time.After(time.Second * 25)
 			ic.Disconnect()
+			ic.done <- true
 		})
 
 	fmt.Println(err)

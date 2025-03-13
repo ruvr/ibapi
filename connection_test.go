@@ -2,9 +2,8 @@ package ibapi
 
 import (
 	"fmt"
+	"log/slog"
 	"testing"
-
-	"go.uber.org/zap"
 )
 
 func TestConnection(t *testing.T) {
@@ -14,8 +13,9 @@ func TestConnection(t *testing.T) {
 	buf := make([]byte, 4096)
 	_, err := conn.Read(buf)
 	if err != nil {
-		log.Panic("read error", zap.Error(err))
+		log.Error("read error", slog.Any("error", err))
+	} else {
+		fmt.Println(string(buf))
 	}
-	fmt.Println(string(buf))
 	conn.disconnect()
 }

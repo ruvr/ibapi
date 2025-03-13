@@ -1,10 +1,9 @@
 package ibapi
 
 import (
+	"log/slog"
 	"strings"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 const (
@@ -52,7 +51,7 @@ func (d *ibDecoder) interpret(msgBytes []byte) {
 	if processer, ok := d.msgID2process[MsgID]; ok {
 		processer(msgBuf)
 	} else {
-		log.Warn("msg ID not found!!!", zap.Int64("msgID", MsgID), zap.Binary("MsgBytes", msgBuf.Bytes()))
+		log.Warn("msg ID not found!!!", slog.Int64("msgID", MsgID), slog.Any("MsgBytes", msgBuf.Bytes()))
 	}
 
 }
@@ -208,7 +207,7 @@ func (d *ibDecoder) wrapUpdateAccountTime(msgBuf *MsgBuffer) {
 	// time.
 	t, err := time.ParseInLocation("04:05", ts, time.Local)
 	if err != nil {
-		log.Panic("failed to parse account time", zap.Error(err))
+		log.Error("failed to parse account time", slog.Any("error", err))
 	}
 	t = t.AddDate(today.Year(), int(today.Month())-1, today.Day()-1)
 

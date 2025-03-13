@@ -4,7 +4,7 @@ ordercondition contains several OrderCondition, such as Price, Time, Margin, Exe
 
 package ibapi
 
-import "go.uber.org/zap"
+import "log/slog"
 
 type OrderConditioner interface {
 	CondType() int64
@@ -195,9 +195,8 @@ func InitOrderCondition(conType int64) (OrderConditioner, int) {
 		cond.setCondType(7)
 		condSize = 5
 	default:
-		log.Panic("unkonwn conType",
-			zap.Int64("conType", conType),
-		)
+		log.Error("unkonwn conType", slog.Int64("conType", conType))
+		panic("ibapi: unkonwn conType")
 	}
 	return cond, condSize
 }

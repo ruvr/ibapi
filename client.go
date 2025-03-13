@@ -7,13 +7,12 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 const (
@@ -73,7 +72,7 @@ func (ic *IbClient) ConnState() int {
 func (ic *IbClient) setConnState(connState int) {
 	preState := ic.conn.state
 	ic.conn.state = connState
-	log.Debug("change connection state", zap.Int("previous", preState), zap.Int("current", connState))
+	log.Debug("change connection state", "previous", preState, "current", connState)
 }
 
 // GetReqID before request data or place order
@@ -84,7 +83,7 @@ func (ic *IbClient) GetReqID() int64 {
 // SetWrapper setup the Wrapper
 func (ic *IbClient) SetWrapper(wrapper IbWrapper) {
 	ic.wrapper = wrapper
-	log.Debug("set wrapper", zap.Reflect("wrapper", wrapper))
+	log.Debug("set wrapper", "wrapper", wrapper)
 	ic.decoder = ibDecoder{wrapper: ic.wrapper}
 }
 
@@ -102,7 +101,7 @@ func (ic *IbClient) SetConnectionOptions(opts string) {
 func (ic *IbClient) Connect(host string, port int, clientID int64) error {
 
 	ic.host, ic.port, ic.clientID = host, port, clientID
-	log.Info("Connect to client", zap.String("host", host), zap.Int("port", port), zap.Int64("clientID", clientID))
+	log.Info("Connect to client", "host", host, "port", port, "clientID", clientID)
 	ic.setConnState(CONNECTING)
 	if err := ic.conn.connect(host, port); err != nil {
 		ic.wrapper.Error(NO_VALID_ID, CONNECT_FAIL.code, CONNECT_FAIL.msg)
@@ -162,7 +161,7 @@ func (ic *IbClient) startAPI() error {
 		startAPI = makeMsgBytes(mSTART_API, v, ic.clientID)
 	}
 
-	log.Debug("start API", zap.Binary("bytes", startAPI))
+	log.Debug("start API", "bytes", startAPI)
 	if _, err := ic.writer.Write(startAPI); err != nil {
 		return err
 	}
@@ -193,7 +192,7 @@ func (ic *IbClient) HandShake() error {
 	msg.Write(head)
 	msg.Write(sizeofCV)
 	msg.Write(clientVersion)
-	log.Debug("send handShake header", zap.Binary("header", msg.Bytes()))
+	log.Debug("send handShake header", "header", msg.Bytes())
 	if _, err := ic.writer.Write(msg.Bytes()); err != nil {
 		return err
 	}
@@ -220,8 +219,8 @@ func (ic *IbClient) HandShake() error {
 	// ic.decoder.errChan = make(chan error, 100)
 	ic.decoder.setmsgID2process()
 
-	log.Info("handShake info", zap.Int("serverVersion", ic.serverVersion))
-	log.Info("handShake info", zap.String("connectionTime", ic.connTime))
+	log.Info("handShake info", "serverVersion", ic.serverVersion)
+	log.Info("handShake info", "connectionTime", ic.connTime)
 
 	// send startAPI to tell server that client is ready
 	if err := ic.startAPI(); err != nil {
@@ -434,7 +433,7 @@ func (ic *IbClient) ReqMktData(reqID int64, contract *Contract, genericTickList 
 
 	if ic.serverVersion >= mMIN_SERVER_VER_LINKING {
 		if len(mktDataOptions) > 0 {
-			log.Panic("not supported")
+			panic("not supported")
 		}
 		fields = append(fields, "")
 	}
@@ -992,7 +991,8 @@ func (ic *IbClient) PlaceOrder(orderID int64, contract *Contract, order *Order) 
 	if ic.serverVersion >= mMIN_SERVER_VER_FRACTIONAL_POSITIONS {
 		fields = append(fields, order.TotalQuantity)
 	} else {
-		fields = append(fields, order.TotalQuantity.IntPart())
+		qty, _, _ := order.TotalQuantity.Int64(0)
+		fields = append(fields, qty)
 	}
 
 	fields = append(fields, order.OrderType)
@@ -1247,7 +1247,7 @@ func (ic *IbClient) PlaceOrder(orderID int64, contract *Contract, order *Order) 
 	}
 
 	if ic.serverVersion >= mMIN_SERVER_VER_PEGGED_TO_BENCHMARK {
-		if order.OrderType == "PEG BENCH" {
+		if isPegBenchOrder(order.OrderType) {
 			fields = append(fields,
 				order.ReferenceContractID,
 				order.IsPeggedChangeAmountDecrease,
@@ -1885,7 +1885,7 @@ func (ic *IbClient) ReqMktDepth(reqID int64, contract *Contract, numRows int, is
 	if ic.serverVersion >= mMIN_SERVER_VER_LINKING {
 		//current doc says this part if for "internal use only" -> won't support it
 		if len(mktDepthOptions) > 0 {
-			log.Panic("not supported")
+			panic("not supported")
 		}
 
 		fields = append(fields, "")
@@ -2066,9 +2066,9 @@ Valid values include:
 @param formatDate:
 	Determines the date format applied to returned bars.
 Valid values include:
-	1 - dates applying to bars returned in the format: yyyymmdd{space}{space}hh:mm:dd
-	2 - dates are returned as a long integer specifying the number of seconds since
-		1/1/1970 GMT.
+	1 - dates applying to bars returned in the operator timezone format: yyyymmdd{space}hh:mm:dd location like “20231019 16:11:48 America/New_York”
+	2 - dates are returned as a long integer specifying the number of seconds since	1/1/1970 GMT.
+	3 -	Day & Time Date	like “1019 16:11:48 America/New_York”
 @param chartOptions:
 	For internal use only. Use default value XYZ.
 */
@@ -3027,14 +3027,14 @@ func (ic *IbClient) goRequest() {
 	defer func() {
 		if errMsg := recover(); errMsg != nil {
 			err := errors.New(errMsg.(string))
-			log.Error("requester got unexpected error", zap.Error(err))
+			slog.Error("requester got unexpected error", "error", err)
 			ic.err = err
 			// ic.Disconnect()
-			log.Debug("try to restart requester")
+			slog.Debug("try to restart requester")
 			go ic.goRequest()
 		}
 	}()
-	defer log.Debug("requester end")
+	defer slog.Debug("requester end")
 	defer ic.wg.Done()
 
 	ic.wg.Add(1)
@@ -3050,13 +3050,13 @@ requestLoop:
 
 			nn, err := ic.writer.Write(req)
 			if err != nil {
-				log.Error("write req error", zap.Int("nbytes", nn), zap.Binary("reqMsg", req), zap.Error(err))
+				slog.Error("write req error", "nbytes", nn, "reqMsg", req, "error", err)
 				ic.writer.Reset(ic.conn)
 				ic.errChan <- err
 			}
 			err = ic.writer.Flush()
 			if err != nil {
-				log.Error("flush req error", zap.Int("nbytes", nn), zap.Binary("reqMsg", req), zap.Error(err))
+				slog.Error("flush req error", "nbytes", nn, "reqMsg", req, "error", err)
 				ic.writer.Reset(ic.conn)
 				ic.errChan <- err
 			}
@@ -3070,14 +3070,14 @@ requestLoop:
 // goReceive receive the msg from the socket, get the fields and put them into msgChan
 // goReceive handle the msgBuf which is different from the offical.Not continuously read, but split first and then decode
 func (ic *IbClient) goReceive() {
-	log.Debug("receiver start")
+	slog.Debug("receiver start")
 	defer func() {
 		if errMsg := recover(); errMsg != nil {
 			err := errors.New(errMsg.(string))
-			log.Error("receiver got unexpected error", zap.Error(err))
+			slog.Error("receiver got unexpected error", "error", err)
 			ic.err = err
 			// ic.Disconnect()
-			log.Debug("try to restart receiver")
+			slog.Debug("try to restart receiver")
 			go ic.goReceive()
 		} else {
 			select {
@@ -3087,7 +3087,7 @@ func (ic *IbClient) goReceive() {
 			}
 		}
 	}()
-	defer log.Debug("receiver end")
+	defer slog.Debug("receiver end")
 	defer ic.wg.Done()
 
 	ic.wg.Add(1)
@@ -3105,14 +3105,14 @@ func (ic *IbClient) goReceive() {
 	default:
 		switch err := ic.scanner.Err(); err {
 		case nil:
-			log.Debug("scanner Done")
+			slog.Debug("scanner Done")
 			// go ic.Disconnect()
 		case bufio.ErrTooLong:
 			errBytes := ic.scanner.Bytes()
 			ic.wrapper.Error(NO_VALID_ID, BAD_LENGTH.code, fmt.Sprintf("%s:%d:%s", BAD_LENGTH.msg, len(errBytes), errBytes))
-			log.Panic(BAD_LENGTH.msg, zap.Error(err))
+			slog.Error(BAD_LENGTH.msg, "error", err)
 		default:
-			log.Panic("scanner Error", zap.Error(err))
+			slog.Error("scanner Error", "error", err)
 		}
 	}
 
@@ -3120,18 +3120,18 @@ func (ic *IbClient) goReceive() {
 
 // goDecode decode the fields received from the msgChan
 func (ic *IbClient) goDecode() {
-	log.Debug("decoder start")
+	slog.Debug("decoder start")
 	defer func() {
 		if errMsg := recover(); errMsg != nil {
 			err := errors.New(errMsg.(string))
-			log.Error("decoder got unexpected error", zap.Error(err))
+			slog.Error("decoder got unexpected error", "error", err)
 			ic.err = err
 			// ic.Disconnect()
-			log.Debug("try to restart decoder")
+			slog.Debug("try to restart decoder")
 			go ic.goDecode()
 		}
 	}()
-	defer log.Debug("decoder end")
+	defer slog.Debug("decoder end")
 	defer ic.wg.Done()
 
 	ic.wg.Add(1)
@@ -3142,7 +3142,7 @@ decodeLoop:
 		case m := <-ic.msgChan:
 			ic.decoder.interpret(m)
 		case e := <-ic.errChan:
-			log.Error("got client error in decode loop", zap.Error(e))
+			slog.Error("got client error in decode loop", "error", e)
 		// case e := <-ic.decoder.errChan:
 		// 	ic.wrapper.Error(NO_VALID_ID, BAD_MESSAGE.code, BAD_MESSAGE.msg+e.Error())
 		case <-ic.terminatedSignal:
@@ -3162,7 +3162,7 @@ func (ic *IbClient) Run() error {
 		ic.wrapper.Error(NO_VALID_ID, NOT_CONNECTED.code, NOT_CONNECTED.msg)
 		return NOT_CONNECTED
 	}
-	log.Info("run client")
+	slog.Info("run client")
 
 	go ic.goRequest()
 	go ic.goDecode()

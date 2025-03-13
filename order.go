@@ -3,7 +3,7 @@ package ibapi
 import (
 	"fmt"
 
-	"github.com/shopspring/decimal"
+	"github.com/govalues/decimal"
 )
 
 const (
